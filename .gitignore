@@ -24,6 +24,11 @@ build/
 
 # Data files (generated)
 data/*.xlsx
+*.xlsx
+
+# Chainlit temp files
+.files/
+.files_temp/
 
 # Logs
 *.log
