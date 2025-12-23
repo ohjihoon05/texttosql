@@ -109,7 +109,7 @@ class ResponseGenerator:
                 model=self.settings.llm_fallback_model,  # Use smaller model for responses
                 base_url=self.settings.llm_base_url,
                 temperature=0.7,  # Slightly creative for natural responses
-                num_predict=512,
+                num_predict=150,  # Limit response length for speed
             )
         return self._llm
 
@@ -216,7 +216,7 @@ class ResponseGenerator:
         self,
         question: str,
         result: QueryResult,
-        timeout: float = 2.0,
+        timeout: float = 15.0,
     ) -> str:
         """Generate natural language response from query result.
 
@@ -244,20 +244,13 @@ class ResponseGenerator:
         try:
             llm = self._get_llm()
 
-            # Apply timeout
-            response = await asyncio.wait_for(
-                llm.ainvoke(prompt),
-                timeout=timeout,
-            )
+            # Direct call without asyncio.wait_for (compatibility issue with langchain_ollama)
+            response = await llm.ainvoke(prompt)
 
             # Clean up response
             response = response.strip()
             logger.info(f"Generated natural language response ({len(response)} chars)")
             return response
-
-        except asyncio.TimeoutError:
-            logger.warning(f"LLM response generation timed out after {timeout}s, using fallback")
-            return self._fallback_simple_response(result)
 
         except Exception as e:
             logger.error(f"Error generating response: {e}")
