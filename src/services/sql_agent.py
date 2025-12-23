@@ -6,9 +6,10 @@ from typing import Any
 
 from src.config import get_settings
 from src.models.schema import ExcelSchema
-from src.models.query import QueryContext, QueryResult, FormattedResponse
+from src.models.query import QueryContext, QueryResult, FormattedResponse, ResponseType
 from src.services.excel_loader import ExcelLoader
 from src.services.llm_router import LLMRouter
+from src.services.response_generator import ResponseGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class SQLAgent:
         self.settings = get_settings()
         self._loader: ExcelLoader | None = None
         self._llm_router = LLMRouter()
+        self._response_generator = ResponseGenerator()
         self._schema: ExcelSchema | None = None
         self._table_mapping: dict[str, str] = {}
 
@@ -104,16 +106,18 @@ class SQLAgent:
             result = self._loader.execute_query(sql_query.raw_sql)
 
             if result.success:
-                # Format successful response
-                answer = self._format_answer(question, result)
+                # Format successful response using LLM
+                answer = await self._format_answer(question, result)
                 data_preview = result.to_markdown_table(max_rows=10)
                 source_sheets = sql_query.tables_used
+                response_type = self._response_generator.get_response_type(result)
 
                 return FormattedResponse(
                     answer=answer,
                     sql_query=sql_query.raw_sql,
                     data_preview=data_preview,
                     source_sheets=source_sheets,
+                    response_type=response_type,
                 )
             else:
                 # Handle query execution failure
@@ -144,8 +148,8 @@ class SQLAgent:
                 source_sheets=[],
             )
 
-    def _format_answer(self, question: str, result: QueryResult) -> str:
-        """Format query result into natural language answer.
+    async def _format_answer(self, question: str, result: QueryResult) -> str:
+        """Format query result into natural language answer using LLM.
 
         Args:
             question: Original question
@@ -154,16 +158,7 @@ class SQLAgent:
         Returns:
             Natural language answer string
         """
-        if result.is_empty:
-            return "검색 결과가 없습니다."
-
-        if result.row_count == 1:
-            return f"1건의 결과를 찾았습니다. (실행 시간: {result.execution_time_ms:.1f}ms)"
-
-        return (
-            f"{result.row_count}건의 결과를 찾았습니다. "
-            f"(실행 시간: {result.execution_time_ms:.1f}ms)"
-        )
+        return await self._response_generator.generate_response(question, result)
 
     async def health_check(self) -> dict[str, Any]:
         """Check system health including LLM connectivity.

@@ -133,3 +133,10 @@ async def on_message(message: cl.Message):
 2. `ruff format src/` - 코드 포맷팅
 3. `pytest tests/` - 테스트 통과 확인
 4. 필요시 `specs/` 문서 업데이트
+
+## Active Technologies
+- Python 3.11 + LangChain, langchain-ollama, Chainlit, Pydantic, DuckDB (004-ai-response-style)
+- DuckDB (in-memory), SQLite (cache) (004-ai-response-style)
+
+## Recent Changes
+- 004-ai-response-style: Added Python 3.11 + LangChain, langchain-ollama, Chainlit, Pydantic, DuckDB

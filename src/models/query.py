@@ -1,10 +1,36 @@
 """Query-related models for Text-to-SQL system."""
 
+from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from .schema import SheetSchema
+
+
+class ResponseType(str, Enum):
+    """Response type classification based on result count."""
+
+    EMPTY = "empty"  # 0 rows
+    SINGLE = "single"  # 1 row
+    FEW = "few"  # 2-10 rows
+    MANY = "many"  # 10+ rows
+    ERROR = "error"  # Query failed
+
+
+class ResponseContext(BaseModel):
+    """Context for LLM response generation."""
+
+    question: str = Field(..., description="Original user question")
+    sql_query: str = Field(default="", description="Executed SQL query")
+    row_count: int = Field(default=0, ge=0, description="Number of result rows")
+    column_names: List[str] = Field(default_factory=list, description="Column names")
+    sample_data: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Sample data rows (max 5)"
+    )
+    response_type: ResponseType = Field(
+        default=ResponseType.EMPTY, description="Response type classification"
+    )
 
 
 class QueryContext(BaseModel):
@@ -112,6 +138,12 @@ class FormattedResponse(BaseModel):
     sql_query: str = Field(default="", description="SQL query used")
     data_preview: str = Field(default="", description="Data preview in table format")
     source_sheets: List[str] = Field(default_factory=list, description="Source sheet names")
+    response_type: ResponseType = Field(
+        default=ResponseType.EMPTY, description="Response type classification"
+    )
+    suggested_questions: List[str] = Field(
+        default_factory=list, description="Suggested follow-up questions"
+    )
 
 
 class CacheEntry(BaseModel):
