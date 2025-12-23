@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build
+*.egg-info/
+dist/
+build/
+
+# Docker image (too large)
+*.tar
+
+# Data files (generated)
+data/*.xlsx
+
+# Logs
+*.log
+.chainlit/
+
+# Cache
+.pytest_cache/
+.coverage
+htmlcov/
+*.tar.gz

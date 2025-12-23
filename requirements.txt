@@ -1,0 +1,30 @@
+# Core Framework
+chainlit>=1.0.0
+langchain>=0.1.0
+langchain-ollama>=0.1.0
+
+# Database
+duckdb>=0.9.0
+chromadb>=0.4.0
+
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0
+Faker>=21.0.0  # Korean dummy data generation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Async Support
+aiofiles>=23.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Development
+ruff>=0.1.0
+pre-commit>=3.0.0
+
+# Utilities
+python-dotenv>=1.0.0
