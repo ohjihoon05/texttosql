@@ -584,7 +584,7 @@ def generate_all_sheets(factory: DataFactory) -> dict[str, pd.DataFrame]:
     sheets: dict[str, pd.DataFrame] = {}
     errors: list[str] = []
 
-    print("📊 테스트 데이터 생성 시작...")
+    print("[INFO] Generating test data...")
 
     # Daily sheets (7개)
     print("  - Daily 시트 생성 중...")
@@ -667,7 +667,7 @@ def generate_all_sheets(factory: DataFactory) -> dict[str, pd.DataFrame]:
 
     # T018b: Error handling
     if errors:
-        print(f"\n⚠️ 일부 시트 생성 실패:")
+        print(f"\n[WARN] Some sheets failed to generate:")
         for err in errors:
             print(f"   - {err}")
 
@@ -697,16 +697,16 @@ def save_to_excel(sheets: dict[str, pd.DataFrame], output_path: Path) -> bool:
         file_size_mb = output_path.stat().st_size / (1024 * 1024)
 
         if file_size_mb < 0.3:
-            print(f"⚠️ 파일 크기가 너무 작습니다: {file_size_mb:.2f}MB")
+            print(f"[WARN] File size too small: {file_size_mb:.2f}MB")
         elif file_size_mb > 10.0:
-            print(f"⚠️ 파일 크기가 너무 큽니다: {file_size_mb:.2f}MB")
+            print(f"[WARN] File size too large: {file_size_mb:.2f}MB")
         else:
-            print(f"✅ 파일 크기 적정: {file_size_mb:.2f}MB")
+            print(f"[OK] File size valid: {file_size_mb:.2f}MB")
 
         return True
 
     except Exception as e:
-        print(f"❌ 파일 저장 실패: {e}")
+        print(f"[ERROR] Failed to save file: {e}")
         return False
 
 
@@ -747,28 +747,28 @@ if __name__ == "__main__":
     args = parse_args()
 
     print("=" * 60)
-    print("🔧 반도체 설비 CS 데일리 리포트 테스트 데이터 생성기")
+    print("[Generator] Semiconductor CS Daily Report Test Data")
     print("=" * 60)
-    print(f"  출력 경로: {args.output}")
-    print(f"  랜덤 시드: {args.seed}")
+    print(f"  Output: {args.output}")
+    print(f"  Seed: {args.seed}")
     print()
 
     # 데이터 생성
     factory = DataFactory(seed=args.seed)
     sheets = generate_all_sheets(factory)
 
-    print(f"\n✅ 생성된 시트 수: {len(sheets)}")
+    print(f"\n[OK] Generated sheets: {len(sheets)}")
 
     # 파일 저장
     output_path = Path(args.output)
     if save_to_excel(sheets, output_path):
-        print(f"\n🎉 완료: {output_path.absolute()}")
+        print(f"\n[DONE] Saved to: {output_path.absolute()}")
 
         # 요약 출력
         total_rows = sum(len(df) for df in sheets.values())
-        print(f"   - 총 시트 수: {len(sheets)}")
-        print(f"   - 총 행 수: {total_rows:,}")
-        print(f"   - 파일 크기: {output_path.stat().st_size / (1024*1024):.2f}MB")
+        print(f"   - Total sheets: {len(sheets)}")
+        print(f"   - Total rows: {total_rows:,}")
+        print(f"   - File size: {output_path.stat().st_size / (1024*1024):.2f}MB")
     else:
-        print("\n❌ 생성 실패")
+        print("\n[FAIL] Generation failed")
         exit(1)

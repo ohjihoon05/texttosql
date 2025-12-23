@@ -49,6 +49,9 @@ async def on_chat_start():
 @cl.on_message
 async def on_message(message: cl.Message):
     """Handle incoming messages."""
+    logger.info(f"Message received: {message.content[:50] if message.content else 'No content'}")
+    logger.info(f"Elements: {message.elements}")
+
     agent: SQLAgent = cl.user_session.get("agent")
 
     if agent is None:
@@ -78,11 +81,19 @@ async def handle_file_upload(message: cl.Message, agent: SQLAgent) -> None:
         message: Message with file elements
         agent: SQL Agent instance
     """
-    # Find Excel files in attachments
+    # Find Excel files in attachments (check by mime type or name)
+    excel_mimes = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+    )
     excel_files = [
         el for el in message.elements
-        if el.path and Path(el.path).suffix.lower() in (".xlsx", ".xls")
+        if el.path and (
+            getattr(el, 'mime', '') in excel_mimes
+            or el.name.lower().endswith(('.xlsx', '.xls'))
+        )
     ]
+    logger.info(f"Found Excel files: {[f.name for f in excel_files]}")
 
     if not excel_files:
         await cl.Message(
@@ -92,7 +103,15 @@ async def handle_file_upload(message: cl.Message, agent: SQLAgent) -> None:
 
     # Use first Excel file
     file = excel_files[0]
-    file_path = file.path
+    original_path = Path(file.path)
+
+    # Copy file with proper extension (Chainlit saves without extension)
+    import shutil
+    temp_dir = Path(".files_temp")
+    temp_dir.mkdir(exist_ok=True)
+    file_path = temp_dir / file.name
+    shutil.copy2(original_path, file_path)
+    logger.info(f"Copied file to: {file_path}")
 
     try:
         # Show loading message
