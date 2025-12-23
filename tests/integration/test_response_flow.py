@@ -220,8 +220,8 @@ class TestEdgeCases:
         assert "Syntax error" in response
 
     @pytest.mark.asyncio
-    async def test_timeout_graceful_fallback(self):
-        """Test graceful fallback on LLM timeout."""
+    async def test_llm_error_graceful_fallback(self):
+        """Test graceful fallback on LLM error."""
         generator = ResponseGenerator()
 
         result = QueryResult(
@@ -234,20 +234,17 @@ class TestEdgeCases:
 
         with patch.object(generator, "_get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            # Simulate slow LLM
-            async def slow_invoke(*args):
-                import asyncio
-                await asyncio.sleep(5)  # Longer than timeout
-                return "늦은 응답"
+            # Simulate LLM error
+            async def error_invoke(*args):
+                raise RuntimeError("LLM connection failed")
 
-            mock_llm.ainvoke = slow_invoke
+            mock_llm.ainvoke = error_invoke
             mock_get_llm.return_value = mock_llm
 
-            # Should timeout and use fallback
+            # Should handle error and use fallback
             response = await generator.generate_response(
                 "테스트",
                 result,
-                timeout=0.1,  # Very short timeout
             )
 
             assert "1건" in response  # Fallback response

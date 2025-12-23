@@ -194,15 +194,15 @@ class TestGenerateResponse:
         assert "오류" in response
 
     @pytest.mark.asyncio
-    async def test_timeout_uses_fallback(self, response_generator, single_result):
-        """Test timeout falls back to simple response."""
+    async def test_llm_error_uses_fallback(self, response_generator, single_result):
+        """Test LLM error falls back to simple response."""
         with patch.object(response_generator, "_get_llm") as mock_get_llm:
             mock_llm = MagicMock()
-            mock_llm.ainvoke = AsyncMock(side_effect=TimeoutError())
+            mock_llm.ainvoke = AsyncMock(side_effect=RuntimeError("Connection failed"))
             mock_get_llm.return_value = mock_llm
 
             response = await response_generator.generate_response(
-                "김철수가 뭘 했어?", single_result, timeout=0.1
+                "김철수가 뭘 했어?", single_result
             )
 
             # Should use fallback
