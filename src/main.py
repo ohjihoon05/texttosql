@@ -33,7 +33,38 @@ async def on_chat_start():
     agent = SQLAgent()
     cl.user_session.set("agent", agent)
 
-    # Send welcome message
+    # Check for default Excel file
+    default_path = settings.default_excel_path
+    if default_path and default_path.exists():
+        # Auto-load default file
+        loading_msg = cl.Message(content=f"📂 기본 파일 '{default_path.name}' 로딩 중...")
+        await loading_msg.send()
+
+        try:
+            schema = agent.load_file(default_path)
+            schema_summary = format_schema_summary(schema)
+
+            await cl.Message(
+                content=(
+                    f"## Excel Text-to-SQL 시스템\n\n"
+                    f"✅ **기본 파일 '{schema.file_name}' 자동 로드 완료!**\n\n"
+                    f"**파일 정보:**\n"
+                    f"- 크기: {schema.file_size_mb:.2f} MB\n"
+                    f"- 시트 수: {len(schema.sheets)}개\n"
+                    f"- 총 행 수: {schema.total_rows:,}행\n"
+                    f"- 로드 시간: {schema.load_time_seconds:.2f}초\n\n"
+                    f"**시트 목록:**\n{schema_summary}\n\n"
+                    "바로 자연어로 질문해보세요! 예: '김철수가 뭘 했어?'"
+                )
+            ).send()
+            logger.info(f"Default file auto-loaded: {default_path}")
+            return
+
+        except Exception as e:
+            logger.warning(f"Failed to auto-load default file: {e}")
+            await cl.Message(content=f"⚠️ 기본 파일 로드 실패: {e}\n다른 파일을 업로드해주세요.").send()
+
+    # Send welcome message (no default file)
     await cl.Message(
         content=(
             "## Excel Text-to-SQL 시스템\n\n"
@@ -178,8 +209,15 @@ async def handle_question(question: str, agent: SQLAgent) -> None:
     await thinking_msg.send()
 
     try:
-        # Ask agent
-        response = await agent.ask(question)
+        # Check if multi-sheet query is needed (FR-001)
+        use_multi_sheet = agent.should_use_multi_sheet(question)
+        logger.info(f"Multi-sheet query: {use_multi_sheet}")
+
+        # Ask agent with appropriate method
+        if use_multi_sheet:
+            response = await agent.ask_multi_sheet(question)
+        else:
+            response = await agent.ask(question)
 
         # Format response
         result_content = f"## 답변\n\n{response.answer}\n\n"

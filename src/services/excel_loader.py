@@ -175,7 +175,7 @@ class ExcelLoader:
             sql: SQL query string (SELECT only)
 
         Returns:
-            QueryResult with success status and data
+            QueryResult with success status and data (as DataFrame)
         """
         if self._conn is None:
             raise RuntimeError("Excel file not loaded. Call load() first.")
@@ -189,12 +189,9 @@ class ExcelLoader:
 
             execution_time = (time.time() - start_time) * 1000  # ms
 
-            # Convert to list of dicts
-            data = df.to_dict(orient="records")
-
             return QueryResult(
                 success=True,
-                data=data,
+                data=df,
                 row_count=len(df),
                 column_names=list(df.columns),
                 execution_time_ms=round(execution_time, 2),
@@ -207,6 +204,142 @@ class ExcelLoader:
                 error_message=str(e),
                 execution_time_ms=round(execution_time, 2),
             )
+
+    def execute_query_with_auto_cast(self, sql: str) -> QueryResult:
+        """Execute SQL with automatic VARCHAR casting on type mismatch (EH-002).
+
+        Args:
+            sql: SQL query string
+
+        Returns:
+            QueryResult with auto-cast fallback on type errors
+        """
+        # First try without casting
+        result = self.execute_query(sql)
+
+        if result.success:
+            return result
+
+        # Check if error is type mismatch
+        error_msg = result.error_message or ""
+        type_error_keywords = [
+            "Type mismatch",
+            "UNION type",
+            "incompatible types",
+            "Cannot compare",
+            "type conversion",
+        ]
+
+        is_type_error = any(kw.lower() in error_msg.lower() for kw in type_error_keywords)
+
+        if not is_type_error:
+            return result
+
+        # Try with VARCHAR casting
+        logger.info("Type mismatch detected, attempting VARCHAR auto-casting")
+
+        casted_sql = self._add_varchar_casting(sql)
+        if casted_sql == sql:
+            # No changes made, return original error
+            return result
+
+        casted_result = self.execute_query(casted_sql)
+        if casted_result.success:
+            logger.info("VARCHAR auto-casting successful")
+        return casted_result
+
+    def _add_varchar_casting(self, sql: str) -> str:
+        """Add CAST(column AS VARCHAR) to SELECT columns in UNION queries.
+
+        Args:
+            sql: Original SQL query
+
+        Returns:
+            SQL with VARCHAR casting applied
+        """
+        import re
+
+        # Simple approach: wrap each column in CAST AS VARCHAR for UNION queries
+        if "UNION" not in sql.upper():
+            return sql
+
+        # Split by UNION ALL or UNION
+        parts = re.split(r'\bUNION\s+ALL\b|\bUNION\b', sql, flags=re.IGNORECASE)
+        if len(parts) < 2:
+            return sql
+
+        casted_parts = []
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+
+            # Extract SELECT columns
+            match = re.match(
+                r'SELECT\s+(.+?)\s+FROM\s+(.+)',
+                part,
+                re.IGNORECASE | re.DOTALL
+            )
+            if not match:
+                casted_parts.append(part)
+                continue
+
+            columns_str = match.group(1)
+            rest = match.group(2)
+
+            # Parse columns (simple split by comma, respecting parentheses)
+            columns = self._split_columns(columns_str)
+
+            # Wrap each column in CAST AS VARCHAR
+            casted_columns = []
+            for col in columns:
+                col = col.strip()
+                # Skip if already casted or is a literal/function
+                if "CAST(" in col.upper() or "'" in col:
+                    casted_columns.append(col)
+                elif " as " in col.lower():
+                    # Has alias: col as alias
+                    col_parts = re.split(r'\s+as\s+', col, flags=re.IGNORECASE)
+                    original = col_parts[0].strip()
+                    alias = col_parts[-1].strip()
+                    casted_columns.append(f"CAST({original} AS VARCHAR) as {alias}")
+                else:
+                    casted_columns.append(f"CAST({col} AS VARCHAR)")
+
+            casted_parts.append(f"SELECT {', '.join(casted_columns)} FROM {rest}")
+
+        return "\nUNION ALL\n".join(casted_parts)
+
+    def _split_columns(self, columns_str: str) -> list[str]:
+        """Split column list respecting parentheses.
+
+        Args:
+            columns_str: Comma-separated column string
+
+        Returns:
+            List of column expressions
+        """
+        columns = []
+        current = ""
+        paren_depth = 0
+
+        for char in columns_str:
+            if char == '(':
+                paren_depth += 1
+                current += char
+            elif char == ')':
+                paren_depth -= 1
+                current += char
+            elif char == ',' and paren_depth == 0:
+                columns.append(current.strip())
+                current = ""
+            else:
+                current += char
+
+        if current.strip():
+            columns.append(current.strip())
+
+        return columns
 
     def close(self) -> None:
         """Close DuckDB connection and cleanup resources."""

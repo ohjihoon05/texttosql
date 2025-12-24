@@ -1,6 +1,7 @@
 """Unit tests for query models."""
 
 import pytest
+import pandas as pd
 from datetime import datetime, timedelta
 from pydantic import ValidationError
 
@@ -12,6 +13,12 @@ from src.models.query import (
     CacheEntry,
 )
 from src.models.schema import SheetSchema, ColumnInfo
+from src.models.sheet_group import (
+    MultiSheetContext,
+    QuestionType,
+    SheetSelection,
+    UnionStrategy,
+)
 
 
 class TestQueryContext:
@@ -78,6 +85,99 @@ class TestQueryContext:
         assert ctx.relevant_sheets == []
         assert ctx.terminology_hints == []
         assert ctx.previous_queries == []
+
+
+class TestQueryContextMultiSheet:
+    """Tests for QueryContext multi-sheet support (T056)."""
+
+    def test_multi_sheet_context_field_exists(self):
+        """QueryContext should have optional multi_sheet_context field."""
+        ctx = QueryContext(question="김철수가 뭘 했어?")
+        assert hasattr(ctx, "multi_sheet_context")
+        assert ctx.multi_sheet_context is None
+
+    def test_multi_sheet_context_with_value(self):
+        """QueryContext should accept MultiSheetContext."""
+        multi_ctx = MultiSheetContext(
+            question_type=QuestionType.PERSON,
+            selected_sheets=[
+                SheetSelection(sheet_name="Daily_20241217", group_name="TICKET_DAILY"),
+                SheetSelection(sheet_name="Daily_20241218", group_name="TICKET_DAILY"),
+            ],
+            common_columns=["날짜", "담당자", "티켓번호"],
+            use_union=True,
+        )
+        ctx = QueryContext(
+            question="김철수가 뭘 했어?",
+            multi_sheet_context=multi_ctx,
+        )
+        assert ctx.multi_sheet_context is not None
+        assert ctx.multi_sheet_context.question_type == QuestionType.PERSON
+        assert ctx.multi_sheet_context.sheet_count == 2
+        assert ctx.multi_sheet_context.use_union is True
+
+    def test_multi_sheet_context_is_optional(self):
+        """multi_sheet_context should be optional."""
+        ctx = QueryContext(question="테스트 질문")
+        assert ctx.multi_sheet_context is None
+
+    def test_multi_sheet_context_with_union_strategy(self):
+        """MultiSheetContext should contain union_strategy."""
+        multi_ctx = MultiSheetContext(
+            question_type=QuestionType.PERIOD,
+            selected_sheets=[],
+            use_union=False,
+            union_strategy=UnionStrategy.COMMON_COLUMNS,
+        )
+        ctx = QueryContext(
+            question="이번 주 완료된 작업",
+            multi_sheet_context=multi_ctx,
+        )
+        assert ctx.multi_sheet_context.union_strategy == UnionStrategy.COMMON_COLUMNS
+
+    def test_query_context_requires_union_property(self):
+        """QueryContext should expose requires_union from multi_sheet_context."""
+        # Without multi_sheet_context
+        ctx = QueryContext(question="질문")
+        assert ctx.requires_union is False
+
+        # With multi_sheet_context (single sheet)
+        multi_ctx_single = MultiSheetContext(
+            question_type=QuestionType.PERSON,
+            selected_sheets=[
+                SheetSelection(sheet_name="Daily_20241217", group_name="TICKET_DAILY"),
+            ],
+        )
+        ctx_single = QueryContext(question="질문", multi_sheet_context=multi_ctx_single)
+        assert ctx_single.requires_union is False
+
+        # With multi_sheet_context (multiple sheets)
+        multi_ctx_multi = MultiSheetContext(
+            question_type=QuestionType.PERSON,
+            selected_sheets=[
+                SheetSelection(sheet_name="Daily_20241217", group_name="TICKET_DAILY"),
+                SheetSelection(sheet_name="Daily_20241218", group_name="TICKET_DAILY"),
+            ],
+        )
+        ctx_multi = QueryContext(question="질문", multi_sheet_context=multi_ctx_multi)
+        assert ctx_multi.requires_union is True
+
+    def test_query_context_sheet_names_property(self):
+        """QueryContext should expose sheet_names from multi_sheet_context."""
+        # Without multi_sheet_context
+        ctx = QueryContext(question="질문")
+        assert ctx.sheet_names == []
+
+        # With multi_sheet_context
+        multi_ctx = MultiSheetContext(
+            question_type=QuestionType.PERSON,
+            selected_sheets=[
+                SheetSelection(sheet_name="Daily_20241217", group_name="TICKET_DAILY"),
+                SheetSelection(sheet_name="Daily_20241218", group_name="TICKET_DAILY"),
+            ],
+        )
+        ctx_with = QueryContext(question="질문", multi_sheet_context=multi_ctx)
+        assert ctx_with.sheet_names == ["Daily_20241217", "Daily_20241218"]
 
 
 class TestSQLQuery:
@@ -162,9 +262,13 @@ class TestQueryResult:
 
     def test_create_successful_result(self):
         """Successful query result creation."""
+        df = pd.DataFrame([
+            {"id": 1, "name": "김철수"},
+            {"id": 2, "name": "이영희"}
+        ])
         result = QueryResult(
             success=True,
-            data=[{"id": 1, "name": "김철수"}, {"id": 2, "name": "이영희"}],
+            data=df,
             row_count=2,
             column_names=["id", "name"],
             execution_time_ms=45.5
@@ -192,12 +296,13 @@ class TestQueryResult:
 
     def test_to_markdown_table_success(self):
         """to_markdown_table should generate valid markdown."""
+        df = pd.DataFrame([
+            {"name": "김철수", "score": 95},
+            {"name": "이영희", "score": 87},
+        ])
         result = QueryResult(
             success=True,
-            data=[
-                {"name": "김철수", "score": 95},
-                {"name": "이영희", "score": 87},
-            ],
+            data=df,
             row_count=2,
             column_names=["name", "score"]
         )
@@ -235,10 +340,10 @@ class TestQueryResult:
 
     def test_to_markdown_table_max_rows(self):
         """to_markdown_table should limit rows."""
-        data = [{"id": i} for i in range(100)]
+        df = pd.DataFrame([{"id": i} for i in range(100)])
         result = QueryResult(
             success=True,
-            data=data,
+            data=df,
             row_count=100,
             column_names=["id"]
         )
@@ -260,6 +365,28 @@ class TestQueryResult:
 
         with pytest.raises(ValidationError):
             QueryResult(success=True, row_count=-1)
+
+    def test_to_dict_list(self):
+        """to_dict_list should convert DataFrame to list of dicts."""
+        df = pd.DataFrame([
+            {"id": 1, "name": "김철수"},
+            {"id": 2, "name": "이영희"}
+        ])
+        result = QueryResult(
+            success=True,
+            data=df,
+            row_count=2,
+            column_names=["id", "name"]
+        )
+        data_list = result.to_dict_list()
+        assert len(data_list) == 2
+        assert data_list[0]["name"] == "김철수"
+
+    def test_to_dict_list_empty(self):
+        """to_dict_list should return empty list when data is None."""
+        result = QueryResult(success=True, row_count=0)
+        data_list = result.to_dict_list()
+        assert data_list == []
 
 
 class TestFormattedResponse:

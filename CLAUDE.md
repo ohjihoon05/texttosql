@@ -24,6 +24,12 @@
 - Pydantic (Data Validation)
 - pytest (Testing)
 
+## Network & Ports
+
+- **Host IP**: 192.168.20.83
+- **Chainlit Port**: 3003
+- **App URL**: http://192.168.20.83:3003
+
 ## External Services
 
 - **LLM Server**: wonik4 (10.249.22.191:11435)
@@ -78,8 +84,8 @@ data/                    # 데이터 파일 (Excel, 캐시)
 ## Common Commands
 
 ```bash
-# 개발 서버 실행
-chainlit run src/main.py --port 3000 --watch
+# 개발 서버 실행 (네트워크 접근 가능)
+chainlit run src/main.py --port 3003 --host 192.168.20.83
 
 # 테스트 실행
 pytest tests/ -v

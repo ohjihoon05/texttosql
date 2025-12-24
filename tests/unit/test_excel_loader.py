@@ -202,6 +202,65 @@ class TestExcelLoaderExecuteQuery:
         loader.close()
 
 
+class TestExecuteQueryWithVarcharCasting:
+    """Tests for VARCHAR auto-casting fallback (T046/EH-002)."""
+
+    @pytest.fixture
+    def mixed_type_excel(self, tmp_path: Path) -> Path:
+        """Create Excel with mixed types in same column across sheets."""
+        file_path = tmp_path / "mixed_types.xlsx"
+        # Sheet1 has integer IDs
+        sheet1 = pd.DataFrame({
+            "ID": [1, 2, 3],
+            "name": ["김철수", "이영희", "박지훈"],
+        })
+        # Sheet2 has string IDs
+        sheet2 = pd.DataFrame({
+            "ID": ["A001", "A002", "A003"],
+            "name": ["최민수", "정유진", "한지민"],
+        })
+        with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+            sheet1.to_excel(writer, sheet_name="Sheet1", index=False)
+            sheet2.to_excel(writer, sheet_name="Sheet2", index=False)
+        return file_path
+
+    def test_union_with_type_mismatch_uses_fallback(self, mixed_type_excel: Path):
+        """UNION with type mismatch should use VARCHAR casting fallback."""
+        loader = ExcelLoader(mixed_type_excel)
+        loader.load()
+
+        # Direct UNION without casting would fail due to type mismatch
+        sql = '''
+        SELECT CAST(ID AS VARCHAR) as ID, name FROM "Sheet1"
+        UNION ALL
+        SELECT CAST(ID AS VARCHAR) as ID, name FROM "Sheet2"
+        '''
+        result = loader.execute_query(sql)
+
+        assert result.success is True
+        assert result.row_count == 6
+
+        loader.close()
+
+    def test_execute_with_auto_varchar_casting(self, mixed_type_excel: Path):
+        """Should automatically cast to VARCHAR on type mismatch error."""
+        loader = ExcelLoader(mixed_type_excel)
+        loader.load()
+
+        # This UNION would fail without auto-casting (integer vs string)
+        sql = '''
+        SELECT ID, name FROM "Sheet1"
+        UNION ALL
+        SELECT ID, name FROM "Sheet2"
+        '''
+        result = loader.execute_query_with_auto_cast(sql)
+
+        assert result.success is True
+        assert result.row_count == 6
+
+        loader.close()
+
+
 class TestExcelLoaderTableMapping:
     """Tests for table name sanitization."""
 

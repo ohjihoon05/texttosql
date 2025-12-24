@@ -145,7 +145,8 @@ class ResponseGenerator:
             ResponseContext with formatted data
         """
         response_type = self.get_response_type(result)
-        sample_data = result.data[:5] if result.data else []
+        # Use to_dict_list() for DataFrame compatibility
+        sample_data = result.to_dict_list()[:5] if result.data is not None else []
 
         return ResponseContext(
             question=question,

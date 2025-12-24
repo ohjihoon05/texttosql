@@ -1,11 +1,16 @@
 """Query-related models for Text-to-SQL system."""
 
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator
-from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from datetime import datetime
 
+import pandas as pd
+
 from .schema import SheetSchema
+
+if TYPE_CHECKING:
+    from .sheet_group import MultiSheetContext
 
 
 class ResponseType(str, Enum):
@@ -49,6 +54,10 @@ class QueryContext(BaseModel):
         default_factory=list,
         description="Previous queries in conversation"
     )
+    multi_sheet_context: Optional[Any] = Field(
+        default=None,
+        description="Multi-sheet query context (T056)"
+    )
 
     @field_validator("question")
     @classmethod
@@ -63,6 +72,20 @@ class QueryContext(BaseModel):
         if len(v) > 10:
             raise ValueError("Maximum 10 relevant sheets allowed")
         return v
+
+    @property
+    def requires_union(self) -> bool:
+        """Check if multi-sheet UNION is required (T056)."""
+        if self.multi_sheet_context is None:
+            return False
+        return self.multi_sheet_context.requires_union
+
+    @property
+    def sheet_names(self) -> List[str]:
+        """Get selected sheet names from multi_sheet_context (T056)."""
+        if self.multi_sheet_context is None:
+            return []
+        return self.multi_sheet_context.sheet_names
 
 
 class SQLQuery(BaseModel):
@@ -93,8 +116,10 @@ class SQLQuery(BaseModel):
 class QueryResult(BaseModel):
     """Result of executing a query."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     success: bool = Field(..., description="Whether query execution succeeded")
-    data: List[Dict[str, Any]] = Field(default_factory=list, description="Query result data")
+    data: Optional[pd.DataFrame] = Field(default=None, description="Query result DataFrame")
     row_count: int = Field(default=0, ge=0, description="Number of rows returned")
     column_names: List[str] = Field(default_factory=list, description="Column names in result")
     execution_time_ms: float = Field(default=0.0, ge=0, description="Execution time in milliseconds")
@@ -121,14 +146,21 @@ class QueryResult(BaseModel):
         lines.append("| " + " | ".join(["---"] * len(self.column_names)) + " |")
 
         # Data rows (limit to max_rows)
-        for row in self.data[:max_rows]:
-            values = [str(row.get(col, "")) for col in self.column_names]
-            lines.append("| " + " | ".join(values) + " |")
+        if self.data is not None:
+            for idx, row in self.data.head(max_rows).iterrows():
+                values = [str(row.get(col, "")) for col in self.column_names]
+                lines.append("| " + " | ".join(values) + " |")
 
         if self.row_count > max_rows:
             lines.append(f"\n... and {self.row_count - max_rows} more rows")
 
         return "\n".join(lines)
+
+    def to_dict_list(self) -> List[Dict[str, Any]]:
+        """Convert DataFrame data to list of dictionaries."""
+        if self.data is not None:
+            return self.data.to_dict(orient="records")
+        return []
 
 
 class FormattedResponse(BaseModel):

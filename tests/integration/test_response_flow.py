@@ -1,6 +1,7 @@
 """Integration tests for the full response generation flow."""
 
 import pytest
+import pandas as pd
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.models.query import QueryResult, ResponseType, FormattedResponse
@@ -26,12 +27,13 @@ def mock_excel_loader():
 @pytest.fixture
 def sample_query_result():
     """Create a sample query result."""
+    df = pd.DataFrame([
+        {"name": "김철수", "date": "2024-12-20", "task": "PM 점검", "team": "A팀"},
+        {"name": "김철수", "date": "2024-12-21", "task": "설비 조치", "team": "A팀"},
+    ])
     return QueryResult(
         success=True,
-        data=[
-            {"name": "김철수", "date": "2024-12-20", "task": "PM 점검", "team": "A팀"},
-            {"name": "김철수", "date": "2024-12-21", "task": "설비 조치", "team": "A팀"},
-        ],
+        data=df,
         row_count=2,
         column_names=["name", "date", "task", "team"],
         execution_time_ms=15.0,
@@ -78,7 +80,7 @@ class TestResponseGeneratorIntegration:
 
         empty_result = QueryResult(
             success=True,
-            data=[],
+            data=pd.DataFrame(columns=["name", "task"]),
             row_count=0,
             column_names=["name", "task"],
             execution_time_ms=5.0,
@@ -97,9 +99,10 @@ class TestResponseGeneratorIntegration:
         """Test summary generation for large result sets."""
         generator = ResponseGenerator()
 
+        df = pd.DataFrame([{"id": i, "task": f"작업{i}"} for i in range(20)])
         large_result = QueryResult(
             success=True,
-            data=[{"id": i, "task": f"작업{i}"} for i in range(20)],
+            data=df,
             row_count=20,
             column_names=["id", "task"],
             execution_time_ms=30.0,
@@ -182,9 +185,10 @@ class TestEdgeCases:
         """Test handling of 100+ rows."""
         generator = ResponseGenerator()
 
+        df = pd.DataFrame([{"id": i} for i in range(150)])
         huge_result = QueryResult(
             success=True,
-            data=[{"id": i} for i in range(150)],
+            data=df,
             row_count=150,
             column_names=["id"],
             execution_time_ms=100.0,
@@ -204,7 +208,7 @@ class TestEdgeCases:
 
         error_result = QueryResult(
             success=False,
-            data=[],
+            data=None,
             row_count=0,
             column_names=[],
             execution_time_ms=0.0,
@@ -224,9 +228,10 @@ class TestEdgeCases:
         """Test graceful fallback on LLM error."""
         generator = ResponseGenerator()
 
+        df = pd.DataFrame([{"name": "테스트"}])
         result = QueryResult(
             success=True,
-            data=[{"name": "테스트"}],
+            data=df,
             row_count=1,
             column_names=["name"],
             execution_time_ms=10.0,

@@ -5,6 +5,9 @@ from pathlib import Path
 import tempfile
 import os
 
+# Enable pytest-asyncio
+pytest_plugins = ('pytest_asyncio',)
+
 # Add src to path for imports
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))

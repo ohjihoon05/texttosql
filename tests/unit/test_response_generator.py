@@ -1,6 +1,7 @@
 """Unit tests for ResponseGenerator."""
 
 import pytest
+import pandas as pd
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from src.models.query import QueryResult, ResponseType
@@ -16,9 +17,10 @@ def response_generator():
 @pytest.fixture
 def empty_result():
     """Create an empty query result."""
+    df = pd.DataFrame(columns=["name", "date", "task"])
     return QueryResult(
         success=True,
-        data=[],
+        data=df,
         row_count=0,
         column_names=["name", "date", "task"],
         execution_time_ms=10.0,
@@ -28,9 +30,10 @@ def empty_result():
 @pytest.fixture
 def single_result():
     """Create a single-row query result."""
+    df = pd.DataFrame([{"name": "김철수", "date": "2024-12-20", "task": "PM 점검"}])
     return QueryResult(
         success=True,
-        data=[{"name": "김철수", "date": "2024-12-20", "task": "PM 점검"}],
+        data=df,
         row_count=1,
         column_names=["name", "date", "task"],
         execution_time_ms=15.0,
@@ -40,13 +43,14 @@ def single_result():
 @pytest.fixture
 def multiple_results():
     """Create a multi-row query result."""
+    df = pd.DataFrame([
+        {"name": "김철수", "date": "2024-12-20", "task": "PM 점검"},
+        {"name": "김철수", "date": "2024-12-21", "task": "설비 이상 조치"},
+        {"name": "김철수", "date": "2024-12-22", "task": "정기 점검"},
+    ])
     return QueryResult(
         success=True,
-        data=[
-            {"name": "김철수", "date": "2024-12-20", "task": "PM 점검"},
-            {"name": "김철수", "date": "2024-12-21", "task": "설비 이상 조치"},
-            {"name": "김철수", "date": "2024-12-22", "task": "정기 점검"},
-        ],
+        data=df,
         row_count=3,
         column_names=["name", "date", "task"],
         execution_time_ms=20.0,
@@ -60,9 +64,10 @@ def many_results():
         {"name": f"직원{i}", "date": f"2024-12-{i:02d}", "task": f"작업{i}"}
         for i in range(1, 16)
     ]
+    df = pd.DataFrame(data)
     return QueryResult(
         success=True,
-        data=data,
+        data=df,
         row_count=15,
         column_names=["name", "date", "task"],
         execution_time_ms=25.0,
@@ -74,7 +79,7 @@ def error_result():
     """Create an error query result."""
     return QueryResult(
         success=False,
-        data=[],
+        data=None,
         row_count=0,
         column_names=[],
         execution_time_ms=0.0,

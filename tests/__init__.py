@@ -1,1 +1,1 @@
-"""Test package for Excel Text-to-SQL system."""
+"""Tests for Excel Text-to-SQL system."""

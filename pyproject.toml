@@ -35,9 +35,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
-
-[tool.pytest-asyncio]
-mode = "auto"
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["src"]

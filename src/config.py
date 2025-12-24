@@ -18,6 +18,10 @@ class Settings(BaseSettings):
         default="gpt-oss:20b",
         description="Primary LLM model"
     )
+    llm_fallback_url: str = Field(
+        default="http://192.168.20.83:11434",
+        description="Fallback Ollama server URL"
+    )
     llm_fallback_model: str = Field(
         default="llama3.2:1b",
         description="Fallback LLM model"
@@ -42,6 +46,10 @@ class Settings(BaseSettings):
     )
 
     # Excel Configuration
+    default_excel_path: Optional[Path] = Field(
+        default=Path("/home/wonchatgpt/oz/Projects/texttosql/data/cs_daily_report.xlsx"),
+        description="Default Excel file to load on startup"
+    )
     max_excel_size_mb: float = Field(
         default=10.0,
         description="Maximum Excel file size in MB"
@@ -65,11 +73,56 @@ class Settings(BaseSettings):
         description="Chainlit server host"
     )
 
+    # Multi-Sheet Query Configuration (T011-T013)
+    max_union_sheets: int = Field(
+        default=10,
+        ge=1,
+        le=20,
+        description="Maximum sheets for UNION query"
+    )
+    default_union_strategy: str = Field(
+        default="COMMON_COLUMNS",
+        description="Default UNION strategy (COMMON_COLUMNS or NULL_PADDING)"
+    )
+    query_timeout: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="Query execution timeout in seconds"
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
     }
+
+
+# Sheet group pattern definitions (T011)
+SHEET_GROUP_PATTERNS: dict[str, str] = {
+    "TICKET_DAILY": r"^Daily_\d{8}$",
+    "TICKET_WEEKLY": r"^Weekly_W\d{1,2}$",
+    "TICKET_MONTHLY": r"^Monthly_",
+    "EQUIPMENT": r"^Equipment_",
+    "TEAM": r"^Team_",
+}
+
+# Question type to sheet group mapping (T013)
+QUESTION_TYPE_SHEET_GROUPS: dict[str, list[str]] = {
+    "PERSON": ["TICKET_DAILY", "TICKET_WEEKLY", "TICKET_MONTHLY"],
+    "PERIOD": ["TICKET_DAILY", "TICKET_WEEKLY", "TICKET_MONTHLY"],
+    "EQUIPMENT": ["EQUIPMENT", "TICKET_DAILY", "TICKET_WEEKLY"],
+    "STATISTICS": ["TICKET_MONTHLY", "TICKET_WEEKLY"],
+}
+
+# Sheet group compatibility matrix (for UNION)
+SHEET_GROUP_COMPATIBILITY: dict[str, list[str]] = {
+    "TICKET_DAILY": ["TICKET_WEEKLY", "TICKET_MONTHLY"],
+    "TICKET_WEEKLY": ["TICKET_DAILY", "TICKET_MONTHLY"],
+    "TICKET_MONTHLY": ["TICKET_DAILY", "TICKET_WEEKLY"],
+    "EQUIPMENT": [],  # Not compatible with TICKET groups
+    "TEAM": [],  # Not compatible with other groups
+}
 
 
 # Global settings instance (cached)
