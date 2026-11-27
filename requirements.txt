@@ -9,7 +9,7 @@ chromadb>=0.4.0
 
 # Data Processing
 pandas>=2.0.0
-openpyxl>=3.1.0
+openpyxl>=3.1.5
 Faker>=21.0.0  # Korean dummy data generation
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
